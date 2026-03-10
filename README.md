@@ -5,13 +5,13 @@ A command-line tool for interacting with Xiaohongshu (小红书) API.
 ## Installation
 
 ```bash
-go install github.com/saulyip/xiaohongshu-cli@latest
+go install github.com/SaulLockYip/xiaohongshu-cli@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/saulyip/xiaohongshu-cli.git
+git clone https://github.com/SaulLockYip/xiaohongshu-cli.git
 cd xiaohongshu-cli
 go build -o xiaohongshu-cli ./cmd/xiaohongshu-cli
 ```
