@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/saulyip/auto-xiaohongshu/internal/out"
 )
 
 func newAuthCmd(flags *rootFlags) *cobra.Command {
@@ -26,11 +25,11 @@ func newAuthCmd(flags *rootFlags) *cobra.Command {
 			defer a.Close()
 
 			if a.IsAuthenticated() {
-				return out.WriteError(nil, flags.asJSON, fmt.Errorf("already authenticated"))
+				return fmt.Errorf("already authenticated")
 			}
 
 			if err := a.LoginWithQR(ctx); err != nil {
-				return out.WriteError(nil, flags.asJSON, err)
+				return err
 			}
 
 			fmt.Println("Login successful!")

@@ -16,6 +16,7 @@ var version = "0.1.0"
 type rootFlags struct {
 	storeDir string
 	asJSON   bool
+	headless bool
 }
 
 func main() {
@@ -37,6 +38,7 @@ func run(args []string) error {
 
 	rootCmd.PersistentFlags().StringVar(&flags.storeDir, "store", "~/.xiaohongshu-cli", "store directory for session data")
 	rootCmd.PersistentFlags().BoolVar(&flags.asJSON, "json", false, "output JSON instead of human-readable text")
+	rootCmd.PersistentFlags().BoolVar(&flags.headless, "headless", true, "run browser in headless mode")
 
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newAuthCmd(&flags))
@@ -54,6 +56,7 @@ func run(args []string) error {
 func newApp(ctx context.Context, flags *rootFlags) (*app.App, error) {
 	return app.New(app.Options{
 		StoreDir: config.ExpandPath(flags.storeDir),
+		Headless: flags.headless,
 		JSON:     flags.asJSON,
 	})
 }

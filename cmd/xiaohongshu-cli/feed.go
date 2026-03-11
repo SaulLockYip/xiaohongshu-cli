@@ -26,12 +26,12 @@ func newFeedCmd(flags *rootFlags) *cobra.Command {
 			defer a.Close()
 
 			if !a.IsAuthenticated() {
-				return out.WriteError(nil, flags.asJSON, fmt.Errorf("not authenticated, run 'auth login' first"))
+				return fmt.Errorf("not authenticated, run 'auth login' first")
 			}
 
 			items, err := a.GetFeed(ctx)
 			if err != nil {
-				return out.WriteError(nil, flags.asJSON, err)
+				return err
 			}
 
 			if flags.asJSON {

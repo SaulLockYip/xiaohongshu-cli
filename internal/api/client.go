@@ -6,9 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -574,31 +576,70 @@ type QRStatus struct {
 
 // CreateQRCode creates a new QR code for login
 func (c *Client) CreateQRCode(ctx context.Context) (*QRCodeResponse, error) {
-	req, err := c.buildRequest(ctx, "POST", "/api/sns/web/v1/login/qrcode/create", map[string]interface{}{
+	// First, visit the main page to get initial cookies
+	initialReq, _ := http.NewRequestWithContext(ctx, "GET", "https://www.xiaohongshu.com/", nil)
+	initialReq.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	initialResp, err := c.httpClient.Do(initialReq)
+	if err == nil {
+		// Collect cookies from initial request
+		for _, cookie := range initialResp.Cookies() {
+			c.cookies = append(c.cookies, cookie)
+		}
+		initialResp.Body.Close()
+	}
+
+	// Now create the QR code request with cookies
+	body := map[string]interface{}{
 		"qr_type": 1,
-	})
+	}
+	data, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("marshal body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/sns/web/v1/login/qrcode/create", bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.doRequest(req)
+	// Build cookie header manually
+	var cookieParts []string
+	for _, cookie := range c.cookies {
+		cookieParts = append(cookieParts, cookie.Name+"="+cookie.Value)
+	}
+	cookieHeader := strings.Join(cookieParts, "; ")
+
+	// Add headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Origin", "https://www.xiaohongshu.com")
+	req.Header.Set("Referer", "https://www.xiaohongshu.com/")
+	req.Header.Set("Cookie", cookieHeader)
+	req.Header.Set("xsecappid", "xhs-pc-web")
+	req.Header.Set("x-t", fmt.Sprintf("%d", time.Now().UnixMilli()))
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("do request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	// Read response body for debugging
+	respBody, _ := io.ReadAll(resp.Body)
 
 	var result struct {
 		Code    int             `json:"code"`
 		Success bool            `json:"success"`
+		Msg     string         `json:"msg"`
 		Data    QRCodeResponse `json:"data"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("decode response: %w, body: %s", err, string(respBody))
 	}
 
 	if !result.Success {
-		return nil, fmt.Errorf("create QR code failed")
+		return nil, fmt.Errorf("create QR code failed: code=%d, msg=%s, body=%s", result.Code, result.Msg, string(respBody))
 	}
 
 	return &result.Data, nil
@@ -606,17 +647,30 @@ func (c *Client) CreateQRCode(ctx context.Context) (*QRCodeResponse, error) {
 
 // PollQRStatus polls for QR code login status
 func (c *Client) PollQRStatus(ctx context.Context, qrID, code string) (*QRStatus, error) {
-	req, err := c.buildRequest(ctx, "POST", "/api/qrcode/userinfo", map[string]string{
+	// Create request without auth headers for polling (public endpoint)
+	body := map[string]string{
 		"qrId": qrID,
 		"code": code,
-	})
+	}
+	data, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("marshal body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/qrcode/userinfo", bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.doRequest(req)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Origin", "https://www.xiaohongshu.com")
+	req.Header.Set("Referer", "https://www.xiaohongshu.com/")
+	req.Header.Set("xsecappid", "xhs-pc-web")
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("do request: %w", err)
 	}
 	defer resp.Body.Close()
 
